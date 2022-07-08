@@ -4,18 +4,16 @@ import torch
 from torch import nn
 
 
-def estimate_ranks(weights, energy_threshold, eng):
+def estimate_ranks(mat_weights, energy_threshold, eng):
     ranks = []
-    to_matlab = weights.tolist()
-    mat_weights = matlab.double(to_matlab)
 
-    unfold_0_mat = eng.unfold(mat_weights, 1)
+    unfold_0_mat = eng.unfolding(mat_weights, 1)
     unfold_0 = np.asarray(unfold_0_mat, dtype=np.float32)
 
-    unfold_1_mat = eng.unfold(mat_weights, 3)
+    unfold_1_mat = eng.unfolding(mat_weights, 3)
     unfold_1 = np.asarray(unfold_1_mat, dtype=np.float32)
 
-    unfold_2_mat = eng.canonical_matricization(mat_weights, 1, 2)
+    unfold_2_mat = eng.can_matricization(mat_weights, 1, 2)
     unfold_2 = np.asarray(unfold_2_mat, dtype=np.float32)
 
     for unfold in (unfold_0, unfold_1, unfold_2):
@@ -41,9 +39,9 @@ def ht2(layer, eng, energy_threshold):
     weights = np.moveaxis(weights, 0, 2)
 
     mat_weights = matlab.double(weights.tolist())
-    R1, R3, R13 = estimate_ranks(weights, energy_threshold, eng)
+    R1, R3, R13 = estimate_ranks(mat_weights, energy_threshold, eng)
 
-    factors = eng.conv_new_ht2_decomposition(mat_weights, R1, R3, R13)
+    factors = eng.ht2_conv_decomposition(mat_weights, R1, R3, R13)
 
     first = np.asarray(factors[0], dtype=np.float32)
     fourth = np.asarray(factors[1], dtype=np.float32)
