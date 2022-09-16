@@ -20,12 +20,11 @@ if __name__ == "__main__":
         if isinstance(layer, nn.modules.conv.Conv2d) and key != "0":
             decomposed = ht2(layer, eng, energy)
             net.features._modules[key] = decomposed
-    
+
     for key, layer in net.classifier._modules.items():
         if isinstance(layer, nn.modules.linear.Linear):
             decomposed = svd_decomposition(layer, energy)
             net.classifier._modules[key] = decomposed
-    
-    checkpoint = {"state_dict": net.state_dict()}
+
+    checkpoint = {"model": net, "state_dict": net.state_dict()}
     torch.save(checkpoint, "vgg16_ht2.pth")
-        

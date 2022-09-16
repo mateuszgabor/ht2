@@ -12,7 +12,7 @@ if __name__ == "__main__":
     net = models.resnet50(True)
     eng = matlab.engine.start_matlab()
     layers = [net.layer1, net.layer2, net.layer3, net.layer4]
-    
+
     decomposed = hosvd1(net.conv1, eng, energy)
     net.conv1 = decomposed
 
@@ -31,10 +31,10 @@ if __name__ == "__main__":
                 conv = block.downsample[0]
                 decomposed_conv = hosvd1(conv, eng, energy)
                 block.downsample[0] = decomposed_conv
-    
+
     decomposed = svd_decomposition(net.fc, energy)
     net.fc = decomposed
-    
+
     print(net)
-    checkpoint = {"state_dict": net.state_dict()}
+    checkpoint = {"model": net, "state_dict": net.state_dict()}
     torch.save(checkpoint, "resnet50_ht2.pth")

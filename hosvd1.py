@@ -10,19 +10,20 @@ def estimate_rank(mat_weights, energy_threshold, eng):
     unfold = np.asarray(unfold_mat, dtype=np.float32)
 
     _, s, _ = np.linalg.svd(unfold)
-    total_sum = np.sum(s ** 2)
+    total_sum = np.sum(s**2)
     s_sum = 0
     count = 0
 
     for i in s:
-        s_sum += i ** 2
+        s_sum += i**2
         count += 1
         energy = s_sum / total_sum
         if energy > energy_threshold:
             rank = count
-            break 
+            break
 
     return rank
+
 
 def hosvd1(layer, eng, energy_threshold):
     is_bias = torch.is_tensor(layer.bias)
@@ -37,11 +38,8 @@ def hosvd1(layer, eng, energy_threshold):
 
     inChannels = layer.in_channels
     outChannels = layer.out_channels
-    kernelH = layer.kernel_size[0]
-    kernelW = layer.kernel_size[0]
 
-    
-    firstWeights = first
+    firstWeights = first if first.ndim > 2 else np.expand_dims(first, axis=(2, 3))
     secondWeights = np.expand_dims(second, axis=(2, 3))
 
     first_layer = nn.Conv2d(
@@ -61,11 +59,10 @@ def hosvd1(layer, eng, energy_threshold):
         stride=1,
         padding=0,
         dilation=layer.dilation,
-        bias=True,
+        bias=is_bias,
     )
 
     first_layer.weight.data = torch.from_numpy(firstWeights)
-    
     if is_bias:
         second_layer.weight.data = torch.from_numpy(secondWeights)
 
