@@ -1,46 +1,47 @@
-import matlab.engine
-import numpy as np
+import tensorly as tl
 import torch
 import torch.nn as nn
+from ht2_decomposition import get_singular_values
+from tensorly.decomposition import partial_tucker
 
 
-def estimate_rank(mat_weights, energy_threshold, eng):
+def estimate_rank(weights, energy_threshold):
     rank = None
-    unfold_mat = eng.unfolding(mat_weights, 1)
-    unfold = np.asarray(unfold_mat, dtype=np.float32)
+    unfold = tl.unfold(weights, 0)
 
-    _, s, _ = np.linalg.svd(unfold)
-    total_sum = np.sum(s**2)
+    s = get_singular_values(
+        unfold,
+    )
+    total_sum = torch.sum(s**2)
     s_sum = 0
     count = 0
-
     for i in s:
         s_sum += i**2
         count += 1
         energy = s_sum / total_sum
         if energy > energy_threshold:
             rank = count
-            break
 
     return rank
 
 
-def hosvd1(layer, eng, energy_threshold):
+def hosvd1(layer, energy_threshold):
+    tl.set_backend("pytorch")
     is_bias = torch.is_tensor(layer.bias)
-    weights = layer.weight.cpu().data.numpy()
-    toMatlabWeights = weights.tolist()
-    mat_weights = matlab.double(toMatlabWeights)
-    R = estimate_rank(mat_weights, energy_threshold, eng)
-    U, T = eng.hosvd1(mat_weights, R, nargout=2)
+    weights = layer.weight.detach()
+    R = estimate_rank(weights, energy_threshold)
+    out, _ = partial_tucker(weights, R, [0])
+    T, factors = out
+    U = factors[0]
 
-    first = np.asarray(T, dtype=np.float32)
-    second = np.asarray(U, dtype=np.float32)
+    first = T
+    second = U
 
     inChannels = layer.in_channels
     outChannels = layer.out_channels
 
-    firstWeights = first if first.ndim > 2 else np.expand_dims(first, axis=(2, 3))
-    secondWeights = np.expand_dims(second, axis=(2, 3))
+    firstWeights = first if first.ndim > 2 else first.unsqueeze(2).unsqueeze(3)
+    secondWeights = second.unsqueeze(2).unsqueeze(3)
 
     first_layer = nn.Conv2d(
         in_channels=inChannels,
@@ -62,8 +63,9 @@ def hosvd1(layer, eng, energy_threshold):
         bias=is_bias,
     )
 
-    first_layer.weight.data = torch.from_numpy(firstWeights)
+    first_layer.weight.data = firstWeights
+    second_layer.weight.data = secondWeights
     if is_bias:
-        second_layer.weight.data = torch.from_numpy(secondWeights)
+        second_layer.bias.data = layer.bias.data
 
     return nn.Sequential(first_layer, second_layer)

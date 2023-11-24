@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
-import numpy as np
+from ht2_decomposition import get_singular_values
 
 
 def estimate_rank(weights, energy_threshold):
     rank = None
-    _, s, _ = np.linalg.svd(weights)
-    total_sum = np.sum(s**2)
+    s = get_singular_values(weights)
+    total_sum = torch.sum(s**2)
     s_sum = 0
     count = 0
 
@@ -22,21 +22,19 @@ def estimate_rank(weights, energy_threshold):
 
 
 def svd_decomposition(layer, energy_threshold):
-    weights = layer.weight.cpu().data.numpy()
+    weights = layer.weight.detach()
     is_bias = torch.is_tensor(layer.bias)
     rank = estimate_rank(weights, energy_threshold)
 
-    U, S, Vt = np.linalg.svd(weights, full_matrices=True)
-    w1 = np.dot(U[:, 0:rank], np.diag(np.sqrt(S[0:rank])))
-    w0 = np.dot(np.diag(np.sqrt(S[0:rank])), Vt[0:rank, :])
-    first_weights = torch.from_numpy(w0)
-    second_weights = torch.from_numpy(w1)
+    U, S, Vt = torch.linalg.svd(weights, full_matrices=False)
+    w1 = U[:, 0:rank]
+    w0 = torch.diag(S[0:rank]) @ Vt[0:rank, :]
 
     first_layer = nn.Linear(w0.shape[1], w0.shape[0], bias=False)
     second_layer = nn.Linear(w1.shape[1], w1.shape[0], bias=is_bias)
 
-    first_layer.weight.data = first_weights
-    second_layer.weight.data = second_weights
+    first_layer.weight.data = w0
+    second_layer.weight.data = w1
 
     if is_bias:
         second_layer.bias.data = layer.bias.data

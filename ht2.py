@@ -1,57 +1,49 @@
-import matlab
-import numpy as np
 import torch
+import tensorly as tl
 from torch import nn
+from ht2_decomposition import ht2_decomposition, get_singular_values
 
 
-def estimate_ranks(mat_weights, energy_threshold, eng):
+def estimate_ranks(weights, energy_threshold):
     ranks = []
+    dims = weights.shape
 
-    unfold_0_mat = eng.unfolding(mat_weights, 1)
-    unfold_0 = np.asarray(unfold_0_mat, dtype=np.float32)
+    unfold_0 = tl.unfold(weights, 0)
+    unfold_2 = tl.unfold(weights, 2)
+    unfold_0_1 = weights.reshape(dims[0] * dims[1], -1)
 
-    unfold_1_mat = eng.unfolding(mat_weights, 3)
-    unfold_1 = np.asarray(unfold_1_mat, dtype=np.float32)
-
-    unfold_2_mat = eng.can_matricization(mat_weights, 1, 2)
-    unfold_2 = np.asarray(unfold_2_mat, dtype=np.float32)
-
-    for unfold in (unfold_0, unfold_1, unfold_2):
-        _, s, _ = np.linalg.svd(unfold)
-        total_sum = np.sum(s ** 2)
+    for unfold in (unfold_0, unfold_2, unfold_0_1):
+        s = get_singular_values(
+            unfold,
+        )
+        total_sum = torch.sum(s**2)
         s_sum = 0
         count = 0
 
         for i in s:
-            s_sum += i ** 2
+            s_sum += i**2
             count += 1
             energy = s_sum / total_sum
             if energy > energy_threshold:
                 ranks.append(count)
-                break 
+                break
 
     return ranks
 
 
-def ht2(layer, eng, energy_threshold):
+def ht2(layer, energy_threshold):
+    tl.set_backend("pytorch")
     is_bias = torch.is_tensor(layer.bias)
-    weights = layer.weight.cpu().data.numpy()
-    weights = np.moveaxis(weights, 0, 2)
+    weights = layer.weight.detach()
+    weights = weights.moveaxis(0, 2)
+    ranks = estimate_ranks(weights, energy_threshold)
+    R1, R3, R13 = ranks
+    first, fourth, second, third = ht2_decomposition(weights, ranks)
 
-    mat_weights = matlab.double(weights.tolist())
-    R1, R3, R13 = estimate_ranks(mat_weights, energy_threshold, eng)
-
-    factors = eng.ht2_conv_decomposition(mat_weights, R1, R3, R13)
-
-    first = np.asarray(factors[0], dtype=np.float32)
-    fourth = np.asarray(factors[1], dtype=np.float32)
-    second = np.asarray(factors[2], dtype=np.float32)
-    third = np.asarray(factors[3], dtype=np.float32)
-
-    first_weights = np.expand_dims(np.swapaxes(first, 0, 1), axis=(2, 3))
-    second_weights = np.expand_dims(np.moveaxis(second, -1, 0), axis=3)
-    third_weights = np.expand_dims(np.swapaxes(third, 1, 2), axis=2)
-    fourth_weights = np.expand_dims(fourth, axis=(2, 3))
+    first_weights = first.T.unsqueeze(2).unsqueeze(3)
+    second_weights = second.moveaxis(-1, 0).unsqueeze(3)
+    third_weights = third.moveaxis(0, 1).unsqueeze(2)
+    fourth_weights = fourth.unsqueeze(2).unsqueeze(3)
 
     first_layer = nn.Conv2d(
         in_channels=layer.in_channels,
@@ -93,10 +85,10 @@ def ht2(layer, eng, energy_threshold):
         bias=is_bias,
     )
 
-    first_layer.weight.data = torch.from_numpy(first_weights)
-    second_layer.weight.data = torch.from_numpy(second_weights)
-    third_layer.weight.data = torch.from_numpy(third_weights)
-    fourth_layer.weight.data = torch.from_numpy(fourth_weights)
+    first_layer.weight.data = first_weights
+    second_layer.weight.data = second_weights
+    third_layer.weight.data = third_weights
+    fourth_layer.weight.data = fourth_weights
 
     if is_bias:
         fourth_layer.bias.data = layer.bias.data
