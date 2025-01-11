@@ -1,6 +1,5 @@
-import torch
 import tensorly as tl
-from tensorly.decomposition import partial_tucker
+import torch
 
 
 def left_svd_qr(X, rank):
@@ -10,13 +9,6 @@ def left_svd_qr(X, rank):
     U = U[:, 0:rank]
     S = S[0:rank]
     return U, S
-
-
-def get_singular_values(X):
-    _, R = tl.qr(X.T)
-    R = R[0 : R.shape[1], :]
-    _, S, _ = torch.linalg.svd(R.T, False)
-    return S
 
 
 def ht2_decomposition(X, ranks):

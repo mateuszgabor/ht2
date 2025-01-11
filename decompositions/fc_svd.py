@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
-from ht2_decomposition import get_singular_values
+
+from utils import get_singular_values
 
 
 def estimate_rank(weights, energy_threshold):
@@ -21,7 +22,7 @@ def estimate_rank(weights, energy_threshold):
     return rank
 
 
-def svd_decomposition(layer, energy_threshold):
+def fc_svd(layer, energy_threshold):
     weights = layer.weight.detach()
     is_bias = torch.is_tensor(layer.bias)
     rank = estimate_rank(weights, energy_threshold)

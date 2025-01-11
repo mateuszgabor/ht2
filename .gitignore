@@ -1,1 +1,8 @@
-venv
+myenv/
+__pycache__/
+weights/
+fine_tuned/
+compressed_weights/
+data/
+train/
+val/

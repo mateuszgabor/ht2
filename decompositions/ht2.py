@@ -1,7 +1,9 @@
-import torch
 import tensorly as tl
+import torch
 from torch import nn
-from ht2_decomposition import ht2_decomposition, get_singular_values
+
+from decompositions.ht2_decomposition import ht2_decomposition
+from utils import get_singular_values
 
 
 def estimate_ranks(weights, energy_threshold):

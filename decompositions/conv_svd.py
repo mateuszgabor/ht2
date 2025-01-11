@@ -1,8 +1,9 @@
 import tensorly as tl
 import torch
 import torch.nn as nn
-from ht2_decomposition import get_singular_values
 from tensorly.decomposition import partial_tucker
+
+from utils import get_singular_values
 
 
 def estimate_rank(weights, energy_threshold):
@@ -21,11 +22,12 @@ def estimate_rank(weights, energy_threshold):
         energy = s_sum / total_sum
         if energy > energy_threshold:
             rank = count
+            break
 
     return rank
 
 
-def hosvd1(layer, energy_threshold):
+def conv_svd(layer, energy_threshold):
     tl.set_backend("pytorch")
     is_bias = torch.is_tensor(layer.bias)
     weights = layer.weight.detach()
