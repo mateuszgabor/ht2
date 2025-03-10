@@ -7,17 +7,19 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
+from tqdm import tqdm
 
 from utils import AverageMeter, accuracy, get_network, load_model
 
 
-def train(trainloader, model, criterion, optimizer, epoch, scheduler):
+def train(trainloader, model, criterion, optimizer, epoch, scheduler, mode):
     model.train()
 
     losses = AverageMeter()
     top1 = AverageMeter()
 
-    for inputs, targets in trainloader:
+    pbar = tqdm(trainloader, desc=f"Epoch {epoch} [TRAIN]", leave=False)
+    for inputs, targets in pbar:
         inputs, targets = (
             inputs.cuda(non_blocking=True),
             targets.cuda(non_blocking=True),
@@ -30,7 +32,11 @@ def train(trainloader, model, criterion, optimizer, epoch, scheduler):
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
-        scheduler.step()
+
+        if mode == "fine_tune":
+            scheduler.step()
+
+        pbar.set_postfix({"loss": f"{losses.avg:.4f}", "acc": f"{top1.avg:.4f}"})
 
     print(f"TRAIN, Epoch: {epoch}, Avg. loss: {losses.avg:.4f}, Top-1: {top1.avg:.4f}")
 
@@ -40,8 +46,9 @@ def test(testloader, model, criterion, epoch):
     losses = AverageMeter()
     top1 = AverageMeter()
 
+    pbar = tqdm(testloader, desc=f"Epoch {epoch} [TEST]", leave=False)
     with torch.no_grad():
-        for inputs, targets in testloader:
+        for inputs, targets in pbar:
             inputs, targets = (
                 inputs.cuda(non_blocking=True),
                 targets.cuda(non_blocking=True),
@@ -53,6 +60,8 @@ def test(testloader, model, criterion, epoch):
             prec1, _ = accuracy(outputs, targets, topk=(1, 5))
             losses.update(loss.item(), inputs.size(0))
             top1.update(prec1[0], inputs.size(0))
+
+            pbar.set_postfix({"loss": f"{losses.avg:.4f}", "acc": f"{top1.avg:.4f}"})
 
     print(f"TEST, Epoch: {epoch}, Avg. loss: {losses.avg:.4f}, Top-1: {top1.avg:.4f}")
 
@@ -148,7 +157,7 @@ def main():
     best_acc = 0.0
     for epoch in range(1, args.epochs + 1):
         print()
-        train(trainloader, model, criterion, optimizer, epoch, scheduler)
+        train(trainloader, model, criterion, optimizer, epoch, scheduler, args.mode)
         best_top1 = test(testloader, model, criterion, epoch)
 
         if best_acc < best_top1:
@@ -157,6 +166,9 @@ def main():
             torch.save(checkpoint, f"{weight_path}/{end}")
             best_acc = best_top1
             continue
+
+        if args.mode == "train":
+            scheduler.step()
 
 
 if __name__ == "__main__":
